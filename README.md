@@ -12,7 +12,7 @@ Cargo Manager 是 Rust cargo 的深色模式圖形化管理工具，以 Python �
 
 - **新增專案**：`cargo new` / `cargo init`，可選 bin 或 lib、edition 2015–2024、版本控制系統。
 - **建置 / 執行**：`run`、`build`、`check`、`test`、`bench`、`clippy`、`fmt`、`doc`、`clean`、`update`、`tree`、`fix`，並可設定 release、features、target、`--bin`、額外參數、程式參數與環境變數，也能輸入自訂 cargo 指令。
-- **相依套件**：列出目前相依，`cargo add` / `remove` / `update -p`，搜尋 crates.io 後雙擊加入。
+- **相依套件**：列出目前相依，`cargo add` / `remove` / `update -p`，可從常用套件選單直接選擇，或搜尋 crates.io 後雙擊加入。
 - **工具鏈 / 安裝**：`rustup` 的 show、update、toolchain、target、component、default、override，以及 `cargo install` / `uninstall`。
 - **指令說明**：可搜尋的 cargo 指令用途與範例。
 - **輸出區**：顯示 cargo 彩色輸出、自動捲動、停止執行中的指令，也可輸入內容給執行中的程式。
@@ -86,7 +86,7 @@ Cargo Manager is a dark-mode desktop GUI for Rust's cargo, built with Python and
 
 - **New Project**: `cargo new` / `cargo init` with bin or lib, editions 2015–2024, and a choice of version control system.
 - **Build / Run**: `run`, `build`, `check`, `test`, `bench`, `clippy`, `fmt`, `doc`, `clean`, `update`, `tree`, and `fix`, with options for release, features, target, `--bin`, extra arguments, program arguments, and environment variables. You can also enter custom cargo commands.
-- **Dependencies**: View current dependencies, run `cargo add` / `remove` / `update -p`, and search crates.io, then double-click a result to add it.
+- **Dependencies**: View current dependencies, run `cargo add` / `remove` / `update -p`, pick from a list of common crates, or search crates.io and double-click a result to add it.
 - **Toolchain / Install**: `rustup` show, update, toolchain, target, component, default, and override, plus `cargo install` / `uninstall`.
 - **Command Guide**: A searchable reference of cargo commands with their purposes and examples.
 - **Output panel**: Shows cargo's colored output, auto-scrolls, stops running commands, and sends input to the running program.

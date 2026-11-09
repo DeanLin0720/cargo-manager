@@ -44,7 +44,7 @@ from PySide6.QtWidgets import (
     QTableWidget, QTableWidgetItem, QTabWidget, QVBoxLayout, QWidget)
 
 APP_NAME = "Cargo Manager"
-APP_VERSION = "1.4.1"
+APP_VERSION = "1.5.0"
 IS_WIN = sys.platform.startswith("win")
 EXE_SUFFIX = ".exe" if IS_WIN else ""
 
@@ -299,6 +299,38 @@ EN = {
     "版本": "Version",
     "類型": "Type",
     "請輸入套件名稱或路徑。": "Please enter a package name or path.",
+    "常用套件": "Common crates",
+    "(選擇常用套件)": "(Select a common crate)",
+    "序列化與設定檔": "Serialization and Config",
+    "資料序列化框架": "Data serialization framework",
+    "讀寫 JSON": "Read and write JSON",
+    "讀寫 TOML": "Read and write TOML",
+    "非同步": "Async",
+    "非同步執行環境": "Async runtime",
+    "Future 與 Stream 工具": "Future and Stream utilities",
+    "在 trait 中使用 async 函式": "Async functions in traits",
+    "網路": "Networking",
+    "HTTP 用戶端": "HTTP client",
+    "Web 伺服器框架": "Web server framework",
+    "命令列": "Command Line",
+    "解析命令列參數": "Parse command-line arguments",
+    "錯誤處理": "Error Handling",
+    "應用程式的通用錯誤型別": "General-purpose error type for applications",
+    "用 derive 定義錯誤型別": "Define error types with derive",
+    "記錄": "Logging",
+    "記錄介面": "Logging facade",
+    "用環境變數控制的記錄器": "Logger configured by environment variables",
+    "結構化記錄與追蹤": "Structured logging and tracing",
+    "tracing 的輸出與過濾": "Output and filtering for tracing",
+    "常用工具": "Utilities",
+    "亂數產生": "Random number generation",
+    "正規表示式": "Regular expressions",
+    "日期與時間": "Date and time",
+    "產生 UUID": "Generate UUIDs",
+    "額外的迭代器工具": "Extra iterator utilities",
+    "資料平行處理": "Data parallelism",
+    "資料庫": "Database",
+    "SQLite 用戶端 (內含 SQLite)": "SQLite client (bundles SQLite)",
     # 主分頁 / 專案列
     "新增專案": "New Project",
     "專案管理": "Projects",
@@ -714,12 +746,63 @@ class RenameProjectDialog(QDialog):
         return self.ed_name.text().strip(), self.chk_folder.isChecked()
 
 
+COMMON_CRATES = [
+    ("序列化與設定檔", [
+        ("serde", "derive", "資料序列化框架"),
+        ("serde_json", "", "讀寫 JSON"),
+        ("toml", "", "讀寫 TOML"),
+    ]),
+    ("非同步", [
+        ("tokio", "full", "非同步執行環境"),
+        ("futures", "", "Future 與 Stream 工具"),
+        ("async-trait", "", "在 trait 中使用 async 函式"),
+    ]),
+    ("網路", [
+        ("reqwest", "json", "HTTP 用戶端"),
+        ("axum", "", "Web 伺服器框架"),
+    ]),
+    ("命令列", [
+        ("clap", "derive", "解析命令列參數"),
+    ]),
+    ("錯誤處理", [
+        ("anyhow", "", "應用程式的通用錯誤型別"),
+        ("thiserror", "", "用 derive 定義錯誤型別"),
+    ]),
+    ("記錄", [
+        ("log", "", "記錄介面"),
+        ("env_logger", "", "用環境變數控制的記錄器"),
+        ("tracing", "", "結構化記錄與追蹤"),
+        ("tracing-subscriber", "env-filter", "tracing 的輸出與過濾"),
+    ]),
+    ("常用工具", [
+        ("rand", "", "亂數產生"),
+        ("regex", "", "正規表示式"),
+        ("chrono", "", "日期與時間"),
+        ("uuid", "v4", "產生 UUID"),
+        ("itertools", "", "額外的迭代器工具"),
+        ("rayon", "", "資料平行處理"),
+    ]),
+    ("資料庫", [
+        ("rusqlite", "bundled", "SQLite 用戶端 (內含 SQLite)"),
+    ]),
+]
+
+
 class AddDependencyDialog(QDialog):
     def __init__(self, parent=None, name="", version=""):
         super().__init__(parent)
         self.setWindowTitle(t("新增相依套件 (cargo add)"))
         self.setMinimumWidth(460)
         form = QFormLayout(self)
+        self.cb_common = QComboBox()
+        self.cb_common.addItem("(選擇常用套件)")
+        for category, crates in COMMON_CRATES:
+            self.cb_common.addItem(f"── {t(category)} ──")
+            self.cb_common.model().item(self.cb_common.count() - 1).setEnabled(False)
+            for crate, features, desc in crates:
+                self.cb_common.addItem(f"{crate} - {t(desc)}", (crate, features))
+        self.cb_common.setMaxVisibleItems(20)
+        self.cb_common.activated.connect(self._pick_common)
         self.ed_name = QLineEdit(name)
         self.ed_name.setPlaceholderText("例如 serde、tokio")
         self.ed_version = QLineEdit(version)
@@ -734,6 +817,7 @@ class AddDependencyDialog(QDialog):
         self.ed_path.setPlaceholderText("本地路徑 (選填, --path)")
         self.ed_git = QLineEdit()
         self.ed_git.setPlaceholderText("Git URL (選填, --git)")
+        form.addRow("常用套件", self.cb_common)
         form.addRow("套件名稱", self.ed_name)
         form.addRow("版本", self.ed_version)
         form.addRow("Features", self.ed_features)
@@ -747,6 +831,15 @@ class AddDependencyDialog(QDialog):
         bb.rejected.connect(self.reject)
         form.addRow(bb)
         apply_i18n(collect_i18n(self))
+
+    def _pick_common(self, index: int):
+        data = self.cb_common.itemData(index)
+        if not data:
+            return
+        self.ed_name.setText(data[0])
+        self.ed_features.setText(data[1])
+        for ed in (self.ed_version, self.ed_path, self.ed_git):
+            ed.clear()
 
     def _accept(self):
         if not self.ed_name.text().strip() and not self.ed_path.text().strip():
