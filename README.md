@@ -15,7 +15,7 @@ Cargo Manager 是 Rust cargo 的深色模式圖形化管理工具，以 Python �
 - **相依套件**：列出目前相依，`cargo add` / `remove` / `update -p`，可從常用套件選單直接選擇，或搜尋 crates.io 後雙擊加入。
 - **工具鏈 / 安裝**：`rustup` 的 show、update、toolchain、target、component、default、override，以及 `cargo install` / `uninstall`。
 - **指令說明**：可搜尋的 cargo 指令用途與範例。
-- **輸出區**：顯示 cargo 彩色輸出、自動捲動、停止執行中的指令，也可輸入內容給執行中的程式。
+- **輸出區**：顯示 cargo 彩色輸出、自動捲動、停止執行中的指令，程式需要輸入時可直接在輸出區打字。
 - **專案管理**：最近 15 個專案、支援 workspace 成員選擇、重新命名單一套件專案（可同時改資料夾），可開啟檔案總管或 VS Code。
 - **介面語系**：在視窗右上角切換繁體中文 / English，立即生效。
 
@@ -89,7 +89,7 @@ Cargo Manager is a dark-mode desktop GUI for Rust's cargo, built with Python and
 - **Dependencies**: View current dependencies, run `cargo add` / `remove` / `update -p`, pick from a list of common crates, or search crates.io and double-click a result to add it.
 - **Toolchain / Install**: `rustup` show, update, toolchain, target, component, default, and override, plus `cargo install` / `uninstall`.
 - **Command Guide**: A searchable reference of cargo commands with their purposes and examples.
-- **Output panel**: Shows cargo's colored output, auto-scrolls, stops running commands, and sends input to the running program.
+- **Output panel**: Shows cargo's colored output, auto-scrolls, stops running commands, and lets you type directly into it when a program needs input.
 - **Project management**: Remembers the 15 most recent projects, supports selecting workspace members, renames single-package projects (optionally with their folder), and opens projects in File Explorer or VS Code.
 - **Interface language**: Switch between Traditional Chinese and English from the top-right corner; the change applies immediately.
 

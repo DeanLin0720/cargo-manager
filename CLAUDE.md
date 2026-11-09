@@ -42,6 +42,7 @@ Rust cargo 的 PySide6 深色模式 GUI 管理工具。單一檔案 `cargo_manag
 | `logo_dir()` / `app_icon()` | logo 資料夾位置（打包後 `_internal/logo`）；讀 `cargo_manager.ico/.png` |
 | `AnsiConverter` | cargo 彩色輸出（ANSI SGR）→ HTML span，跨行保留狀態 |
 | `DARK_QSS` / `apply_dark()` | 深色主題 |
+| `ConsoleEdit` | 輸出區元件；執行中可在最後一行直接輸入，其餘內容唯讀 |
 | `EN` / `t()` / `collect_i18n()` / `apply_i18n()` | 語系：以繁中原文為 key 的英文對照表；`collect_i18n` 掃描靜態文字，`MainWindow._retranslate()` 切換時重繪 |
 | `rename_manifest()` / `RenameProjectDialog` / `rename_project` | 只改 `[package]` 的 `name` 並保留檔案格式；資料夾改名失敗時還原 `Cargo.toml` |
 | `AddDependencyDialog` | `cargo add` 對話框，`build_args()` 組參數（版本 / features / dev / build / optional / path / git） |
@@ -70,7 +71,7 @@ Rust cargo 的 PySide6 深色模式 GUI 管理工具。單一檔案 `cargo_manag
 - `run_quiet` 的 callback 需容忍 QProcess 已被銷毀（視窗關閉時），已用 `try/except RuntimeError` 保護。
 - 語系：程式內字串仍寫繁體中文，並在 `EN` 加上英文對照（英文不可含 `&`，會被當成快捷鍵）。靜態元件文字建好後會自動納入切換；執行期才產生的文字用 `t("...{x}").format(x=...)`（不要用 f-string 當 key）；會停留在畫面上的動態文字要能在 `_retranslate()` 重繪（狀態列 `_set_status`、專案資訊 `_set_info`）。
 
-## 功能清單（目前 v1.5.0）
+## 功能清單（目前 v1.6.0）
 
 - **語系**：主分頁列右上角切換繁體中文 / English，立即生效，存於 JSON 的 `ui.language`（預設繁中）；已輸出的記錄與 cargo 輸出不翻譯。
 
@@ -83,7 +84,7 @@ Rust cargo 的 PySide6 深色模式 GUI 管理工具。單一檔案 `cargo_manag
   - 設定：cargo / rustup 路徑（自動偵測、瀏覽、儲存並檢查）、清除最近專案、執行前清除輸出。
   - 指令說明：cargo 各指令的分類、用途與範例表格，可依關鍵字即時篩選。
 - **關於**：圖示、名稱、版本、簡介、作者、Python/PySide6/cargo/rustc/rustup 版本、設定檔路徑、相關連結。
-- 輸出區：ANSI 彩色、自動捲動、停止、清除；未換行的提示會立即顯示；輸入列（`send_stdin`，僅主程序執行中可用）可傳文字給執行中的程式，「結束輸入」送出 EOF。
+- 輸出區：ANSI 彩色、自動捲動、停止、清除；未換行的提示會立即顯示；主程序執行中可直接在輸出區最後一行輸入（`ConsoleEdit`，Enter 送出、支援輸入法與貼上，既有輸出不可修改），Ctrl+C（無選取時）停止，Ctrl+D / Ctrl+Z 或「結束輸入」送出 EOF。寫入輸出區一律走 `appendHtml` 或 `begin_output / end_output`，才能保留輸入中的文字。
 
 ## 測試
 
@@ -101,4 +102,4 @@ QT_QPA_PLATFORM=offscreen python3 test_script.py
 
 ## 版本
 
-- 修改功能時同步更新 `APP_VERSION`（目前 `1.5.0`）與本檔「功能清單」。
+- 修改功能時同步更新 `APP_VERSION`（目前 `1.6.0`）與本檔「功能清單」。

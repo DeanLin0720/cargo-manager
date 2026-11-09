@@ -10,7 +10,7 @@ Cargo Manager — Rust cargo 圖形化管理工具 (PySide6, 深色模式)
   * 相依套件: 列表 (cargo metadata)、cargo add / remove / update -p、crates.io 搜尋 (cargo search)
   * 新專案: cargo new / cargo init (bin / lib, edition, vcs)
   * 工具鏈: rustup show / update / toolchain / target add、cargo install / uninstall
-  * 輸出視窗支援 ANSI 色彩、可中止執行中的程序、可輸入內容給執行中的程式
+  * 輸出視窗支援 ANSI 色彩、可中止執行中的程序、可直接在輸出區輸入內容給執行中的程式
   * 指令說明: 可搜尋的 cargo 指令用途與範例
   * 介面語系: 繁體中文 / English (主分頁右上角切換)
   * 設定存於程式同目錄的 cargo_manager_settings.json
@@ -33,18 +33,18 @@ import sys
 from functools import partial
 from pathlib import Path
 
-from PySide6.QtCore import QByteArray, QProcess, QProcessEnvironment, Qt, QUrl
-from PySide6.QtGui import (QColor, QDesktopServices, QFont, QIcon, QPalette, QTextCharFormat,
-                           QTextCursor)
+from PySide6.QtCore import QByteArray, QProcess, QProcessEnvironment, Qt, QUrl, Signal
+from PySide6.QtGui import (QColor, QDesktopServices, QFont, QIcon, QKeySequence, QPalette,
+                           QTextCharFormat, QTextCursor)
 from PySide6.QtWidgets import (
     QAbstractButton, QAbstractItemView, QApplication, QButtonGroup, QCheckBox,
     QComboBox, QDialog, QDialogButtonBox, QFileDialog, QFormLayout, QFrame, QGridLayout,
-    QGroupBox, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QMainWindow,
+    QGroupBox, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QMainWindow, QMenu,
     QMessageBox, QPlainTextEdit, QPushButton, QRadioButton, QSplitter,
     QTableWidget, QTableWidgetItem, QTabWidget, QVBoxLayout, QWidget)
 
 APP_NAME = "Cargo Manager"
-APP_VERSION = "1.5.0"
+APP_VERSION = "1.6.0"
 IS_WIN = sys.platform.startswith("win")
 EXE_SUFFIX = ".exe" if IS_WIN else ""
 
@@ -352,12 +352,12 @@ EN = {
     "自動捲動": "Auto-scroll",
     "■ 停止": "■ Stop",
     "清除": "Clear",
-    "輸入": "Input",
-    "傳給執行中程式的輸入   (Enter 送出)": "Input for the running program   (Enter to send)",
-    "送出": "Send",
     "結束輸入": "End input",
-    "關閉標準輸入 (EOF)，用於會讀取到輸入結尾的程式":
-        "Close standard input (EOF) for programs that read until the end of input",
+    "關閉標準輸入 (EOF)，用於會讀取到輸入結尾的程式 (Ctrl+D)":
+        "Close standard input (EOF) for programs that read until the end of input (Ctrl+D)",
+    "複製": "Copy",
+    "貼上": "Paste",
+    "全選": "Select All",
     "自訂指令, 例如: build --example demo   (Enter 執行)":
         "Custom command, e.g. build --example demo   (Enter to run)",
     "執行": "Run",
@@ -879,6 +879,194 @@ class AddDependencyDialog(QDialog):
 
 
 # ──────────────────────────────────────────────────────────── 主視窗
+# ──────────────────────────────────────────────────────────── 輸出區
+class ConsoleEdit(QPlainTextEdit):
+    """輸出區; 指令執行中可像終端機一樣直接在最後一行輸入, 其餘內容維持唯讀。"""
+    line_entered = Signal(str)
+    eof_requested = Signal()
+    interrupt_requested = Signal()
+
+    def __init__(self):
+        super().__init__()
+        self.setReadOnly(True)
+        self.setAcceptDrops(False)
+        self._anchor = None  # 輸入區起點; None 表示目前不接受輸入
+        self._blank_line = False  # 輸入區是否獨佔一個新行
+        self._batch = False
+        self._input_format = QTextCharFormat()
+        self._input_format.setForeground(QColor("#e8a15c"))
+
+    @property
+    def active(self) -> bool:
+        return self._anchor is not None
+
+    def start_input(self):
+        self.setReadOnly(False)
+        self._anchor = QTextCursor(self.document())
+        self._anchor.setKeepPositionOnInsert(True)
+        self._restore_pending("", 0, same_line=False)
+        self.setFocus()
+
+    def finish_input(self):
+        if self.active:
+            self._take_pending()
+            self._anchor = None
+            self.setReadOnly(True)
+
+    def _end_cursor(self) -> QTextCursor:
+        cursor = QTextCursor(self.document())
+        cursor.movePosition(QTextCursor.End)
+        return cursor
+
+    def _pending_cursor(self) -> QTextCursor:
+        # keepPositionOnInsert 只固定 position, 複製的游標 anchor 會偏移, 所以重新定位
+        cursor = QTextCursor(self.document())
+        cursor.setPosition(self._anchor.position())
+        cursor.movePosition(QTextCursor.End, QTextCursor.KeepAnchor)
+        return cursor
+
+    def _take_pending(self) -> tuple:
+        """暫時移除輸入中的文字, 讓程式輸出能寫在它前面。"""
+        offset = self.textCursor().position() - self._anchor.position()
+        cursor = self._pending_cursor()
+        text = cursor.selectedText()
+        cursor.removeSelectedText()
+        if self._blank_line:
+            cursor.deletePreviousChar()
+            self._blank_line = False
+        return text, offset if offset >= 0 else None
+
+    def _restore_pending(self, text: str, offset, same_line: bool):
+        cursor = self._end_cursor()
+        if not same_line:
+            cursor.insertBlock()
+            self._blank_line = True
+        self._anchor.setPosition(cursor.position())
+        cursor.insertText(text, self._input_format)
+        if offset is not None:
+            caret = self.textCursor()
+            caret.setPosition(self._anchor.position() + min(offset, len(text)))
+            self.setTextCursor(caret)
+            self.setCurrentCharFormat(self._input_format)
+
+    def begin_output(self):
+        """開始寫入程式輸出; 回傳值交給 end_output。"""
+        if not self.active or self._batch:
+            return None
+        self._batch = True
+        return self._take_pending()
+
+    def end_output(self, state, same_line=False):
+        if state is not None:
+            self._batch = False
+            self._restore_pending(*state, same_line)
+
+    def appendHtml(self, text: str):
+        state = self.begin_output()
+        super().appendHtml(text)
+        self.end_output(state)
+
+    def _in_input(self) -> bool:
+        cursor = self.textCursor()
+        return min(cursor.position(), cursor.anchor()) >= self._anchor.position()
+
+    def _prepare_edit(self):
+        """游標或選取範圍在輸入區外時, 先回到輸入區結尾。"""
+        if not self._in_input():
+            self.setTextCursor(self._end_cursor())
+        self.setCurrentCharFormat(self._input_format)
+
+    def _submit(self):
+        text = self._pending_cursor().selectedText()
+        cursor = self._end_cursor()
+        cursor.insertBlock()
+        self._blank_line = True
+        self._anchor.setPosition(cursor.position())
+        self.setTextCursor(cursor)
+        self.setCurrentCharFormat(self._input_format)
+        self.line_entered.emit(text)
+
+    def _backspace(self, by_word: bool, event):
+        if not self._in_input():  # 游標在舊輸出上: 只回到輸入區, 不刪字
+            self._prepare_edit()
+            return
+        self.setCurrentCharFormat(self._input_format)
+        cursor = self.textCursor()
+        start = self._anchor.position()
+        if not cursor.hasSelection() and cursor.position() <= start:
+            return
+        if not by_word or cursor.hasSelection():
+            super().keyPressEvent(event)
+            return
+        end = cursor.position()
+        cursor.movePosition(QTextCursor.PreviousWord, QTextCursor.KeepAnchor)
+        if cursor.position() < start:  # 不刪到輸入區以外
+            cursor.setPosition(end)
+            cursor.setPosition(start, QTextCursor.KeepAnchor)
+        cursor.removeSelectedText()
+
+    def keyPressEvent(self, event):
+        if event.matches(QKeySequence.Copy):
+            if self.textCursor().hasSelection():
+                self.copy()
+            elif self.active:
+                self.interrupt_requested.emit()
+            return
+        if not self.active:
+            super().keyPressEvent(event)
+            return
+        key = event.key()
+        mods = event.modifiers()
+        ctrl = bool(mods & Qt.ControlModifier) and not mods & Qt.AltModifier  # AltGr = Ctrl+Alt
+        if ctrl and key in (Qt.Key_D, Qt.Key_Z):
+            self.eof_requested.emit()
+        elif event.matches(QKeySequence.Cut):
+            if self._in_input():
+                super().keyPressEvent(event)
+        elif key in (Qt.Key_Return, Qt.Key_Enter):
+            self._submit()
+        elif key == Qt.Key_Backspace:
+            self._backspace(ctrl, event)
+        elif key == Qt.Key_Delete:
+            self._prepare_edit()
+            super().keyPressEvent(event)
+        elif key == Qt.Key_Home and not ctrl and self._in_input():
+            caret = self.textCursor()
+            mode = QTextCursor.KeepAnchor if mods & Qt.ShiftModifier else QTextCursor.MoveAnchor
+            caret.setPosition(self._anchor.position(), mode)
+            self.setTextCursor(caret)
+        else:
+            text = event.text()
+            if text and not ctrl and (text.isprintable() or text == "\t"):
+                self._prepare_edit()
+            super().keyPressEvent(event)
+
+    def inputMethodEvent(self, event):
+        if self.active and (event.commitString() or event.preeditString()):
+            self._prepare_edit()
+        super().inputMethodEvent(event)
+
+    def canInsertFromMimeData(self, source) -> bool:
+        return self.active and source.hasText()
+
+    def insertFromMimeData(self, source):
+        if not self.active:
+            return
+        self._prepare_edit()
+        lines = source.text().replace("\r\n", "\n").replace("\r", "\n").split("\n")
+        for line in lines[:-1]:
+            self.textCursor().insertText(line, self._input_format)
+            self._submit()
+        self.textCursor().insertText(lines[-1], self._input_format)
+
+    def contextMenuEvent(self, event):
+        menu = QMenu(self)
+        menu.addAction(t("複製"), self.copy).setEnabled(self.textCursor().hasSelection())
+        menu.addAction(t("貼上"), self.paste).setEnabled(self.canPaste())
+        menu.addAction(t("全選"), self.selectAll)
+        menu.exec(event.globalPos())
+
+
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -991,12 +1179,19 @@ class MainWindow(QMainWindow):
         self.btn_stop.setEnabled(False)
         self.btn_stop.clicked.connect(self.stop_process)
         oh.addWidget(self.btn_stop)
+        self.btn_close_stdin = QPushButton("結束輸入")
+        self.btn_close_stdin.setToolTip("關閉標準輸入 (EOF)，用於會讀取到輸入結尾的程式 (Ctrl+D)")
+        self.btn_close_stdin.setEnabled(False)
+        self.btn_close_stdin.clicked.connect(self.close_stdin)
+        oh.addWidget(self.btn_close_stdin)
         b = QPushButton("清除")
         b.clicked.connect(lambda: self.console.clear())
         oh.addWidget(b)
         ol.addLayout(oh)
-        self.console = QPlainTextEdit()
-        self.console.setReadOnly(True)
+        self.console = ConsoleEdit()
+        self.console.line_entered.connect(self.send_stdin)
+        self.console.eof_requested.connect(self.close_stdin)
+        self.console.interrupt_requested.connect(self.stop_process)
         self.console.setMaximumBlockCount(30000)
         self.console.setLineWrapMode(QPlainTextEdit.NoWrap)
         mono = QFont("Cascadia Mono" if IS_WIN else "Monospace")
@@ -1005,23 +1200,6 @@ class MainWindow(QMainWindow):
         self.console.setFont(mono)
         self.console.setStyleSheet("QPlainTextEdit{background:#16171a;}")
         ol.addWidget(self.console, 1)
-
-        # 傳給執行中程式的輸入
-        ih = QHBoxLayout()
-        ih.addWidget(QLabel("輸入"))
-        self.ed_stdin = QLineEdit()
-        self.ed_stdin.setPlaceholderText("傳給執行中程式的輸入   (Enter 送出)")
-        self.ed_stdin.returnPressed.connect(self.send_stdin)
-        ih.addWidget(self.ed_stdin, 1)
-        self.btn_send_stdin = QPushButton("送出")
-        self.btn_send_stdin.clicked.connect(self.send_stdin)
-        ih.addWidget(self.btn_send_stdin)
-        self.btn_close_stdin = QPushButton("結束輸入")
-        self.btn_close_stdin.setToolTip("關閉標準輸入 (EOF)，用於會讀取到輸入結尾的程式")
-        self.btn_close_stdin.clicked.connect(self.close_stdin)
-        ih.addWidget(self.btn_close_stdin)
-        ol.addLayout(ih)
-        self._set_stdin_enabled(False)
 
         splitter.addWidget(out_box)
         splitter.setSizes([520, 320])
@@ -1792,7 +1970,12 @@ class MainWindow(QMainWindow):
         self._scroll()
 
     def _scroll(self):
-        if self.chk_autoscroll.isChecked():
+        if not self.chk_autoscroll.isChecked():
+            return
+        if self.console.active:  # 輸入中只捲動畫面, 不移動游標
+            bar = self.console.verticalScrollBar()
+            bar.setValue(bar.maximum())
+        else:
             self.console.moveCursor(QTextCursor.End)
             self.console.ensureCursorVisible()
 
@@ -1801,6 +1984,7 @@ class MainWindow(QMainWindow):
             return
         data = bytes(self.proc.readAllStandardOutput()).decode("utf-8", errors="replace")
         data = data.replace("\r\n", "\n")
+        state = self.console.begin_output()
         self._remove_partial_view()
         text = self._partial + data
         lines = text.split("\n")
@@ -1811,6 +1995,7 @@ class MainWindow(QMainWindow):
                 line = line.split("\r")[-1]
             self.console.appendHtml(self.ansi.convert(line))
         self._show_partial()
+        self.console.end_output(state, same_line=self._partial_cursor is not None)
         if lines or self._partial:
             self._scroll()
 
@@ -1833,41 +2018,20 @@ class MainWindow(QMainWindow):
             self._partial_cursor = None
 
     # ───────────────────────── 程式輸入
-    def _set_stdin_enabled(self, on: bool):
-        for w in (self.ed_stdin, self.btn_send_stdin, self.btn_close_stdin):
-            w.setEnabled(on)
-
-    def send_stdin(self):
-        if not self.is_running() or not self.ed_stdin.isEnabled():
+    def send_stdin(self, text: str):
+        if not self.is_running():
             return
-        text = self.ed_stdin.text()
-        self.ed_stdin.clear()
-        self.proc.write((text + "\n").encode("utf-8"))
-        self._echo_input(text)
-
-    def _echo_input(self, text: str):
-        """把使用者的輸入顯示在輸出區; 有未換行的提示時接在提示後面。"""
-        color = "#e8a15c"
-        doc = self.console.document()
-        if self._partial_cursor and self._partial_cursor.block() == doc.lastBlock():
-            self.ansi.convert(self._partial)  # 這段已定案, 更新跨行色彩狀態
+        if self._partial:  # 提示與輸入的這一行已定案
+            self.ansi.convert(self._partial)
             self._partial = ""
             self._partial_cursor = None
-            fmt = QTextCharFormat()
-            fmt.setForeground(QColor(color))
-            cursor = QTextCursor(doc)
-            cursor.movePosition(QTextCursor.End)
-            cursor.insertText(text, fmt)
-            self._scroll()
-        else:
-            shown = html.escape(text).replace("  ", "&nbsp;&nbsp;") or "&nbsp;"
-            self.console.appendHtml(f'<span style="color:{color}">{shown}</span>')
-            self._scroll()
+        self.proc.write((text + "\n").encode("utf-8"))
 
     def close_stdin(self):
-        if self.is_running():
+        if self.is_running() and self.console.active:
             self.proc.closeWriteChannel()
-            self._set_stdin_enabled(False)
+            self.console.finish_input()
+            self.btn_close_stdin.setEnabled(False)
 
     # ───────────────────────── 執行程序
     def _env(self, extra_env: dict | None = None, color=True) -> QProcessEnvironment:
@@ -1924,6 +2088,7 @@ class MainWindow(QMainWindow):
             self._set_busy(False)
 
     def _on_finished(self, code, status, on_done):
+        self.console.finish_input()
         self._partial = ""  # 未換行的內容已由 _show_partial 顯示
         self._partial_cursor = None
         if status == QProcess.CrashExit:
@@ -1940,12 +2105,12 @@ class MainWindow(QMainWindow):
         self.btn_stop.setEnabled(busy)
         for b in self.busy_buttons:
             b.setEnabled(not busy)
-        self._set_stdin_enabled(busy)
+        self.btn_close_stdin.setEnabled(busy)
         if busy:
-            self.ed_stdin.setFocus()
+            self.console.start_input()
             self._set_status("執行中: {text}", text=text)
         else:
-            self.ed_stdin.clear()
+            self.console.finish_input()
             self._set_status("就緒")
 
     def stop_process(self):
