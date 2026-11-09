@@ -13,15 +13,14 @@ Cargo Manager — Rust cargo 圖形化管理工具 (PySide6, 深色模式)
   * 輸出視窗支援 ANSI 色彩、可中止執行中的程序
   * 指令說明: 可搜尋的 cargo 指令用途與範例
   * 介面語系: 繁體中文 / English (主分頁右上角切換)
-  * 設定存於程式同目錄的 cargo_manager.ini
+  * 設定存於程式同目錄的 cargo_manager.json
 
 需求: Python 3.9+、PySide6、已安裝 Rust (rustup / cargo)
 
-圖示: 放在程式 (exe) 所在資料夾的 ./logo/cargo_manager.ico (或 .png)
+圖示: logo/cargo_manager.ico (或 .png); 打包後位於 _internal/logo, 原始碼執行時位於 .py 同層
 
-PyInstaller 打包指令:
-  pyinstaller -D -w --name cargo_manager --icon logo/cargo_manager.ico cargo_manager.py
-  打包後把 logo 資料夾複製到 dist/cargo_manager/ (與 cargo_manager.exe 同層)
+PyInstaller 打包指令 (logo 會自動放進 dist/cargo_manager/_internal/logo):
+  pyinstaller -D -w --name cargo_manager --icon logo/cargo_manager.ico --add-data "logo:logo" cargo_manager.py
 """
 
 import html
@@ -34,7 +33,7 @@ import sys
 from functools import partial
 from pathlib import Path
 
-from PySide6.QtCore import QProcess, QProcessEnvironment, QSettings, Qt, QUrl
+from PySide6.QtCore import QByteArray, QProcess, QProcessEnvironment, Qt, QUrl
 from PySide6.QtGui import (QColor, QDesktopServices, QFont, QIcon, QPalette,
                            QTextCursor)
 from PySide6.QtWidgets import (
@@ -45,7 +44,7 @@ from PySide6.QtWidgets import (
     QTableWidget, QTableWidgetItem, QTabWidget, QVBoxLayout, QWidget)
 
 APP_NAME = "Cargo Manager"
-APP_VERSION = "1.2.1"
+APP_VERSION = "1.2.2"
 IS_WIN = sys.platform.startswith("win")
 EXE_SUFFIX = ".exe" if IS_WIN else ""
 
@@ -56,6 +55,38 @@ def app_dir() -> Path:
     if getattr(sys, "frozen", False):
         return Path(sys.executable).resolve().parent
     return Path(__file__).resolve().parent
+
+
+def settings_path() -> Path:
+    return app_dir() / "cargo_manager.json"
+
+
+def read_settings() -> dict:
+    """讀取設定檔; 不存在或內容損毀時回傳空設定。"""
+    try:
+        data = json.loads(settings_path().read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def write_settings(data: dict):
+    """先寫暫存檔再取代, 避免寫到一半中斷而損毀設定; 資料夾不可寫時略過。"""
+    path = settings_path()
+    tmp = path.with_name(path.name + ".tmp")
+    try:
+        tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        os.replace(tmp, path)
+    except OSError:
+        pass
+
+
+def setting_value(data: dict, key: str, default):
+    """依 "區段/名稱" 取值; 缺少或型別與預設值不同時回傳預設值。"""
+    value = data
+    for part in key.split("/"):
+        value = value.get(part) if isinstance(value, dict) else None
+    return value if isinstance(value, type(default)) else default
 
 
 def norm_exe(path: str) -> str:
@@ -77,10 +108,17 @@ def find_tool(name: str) -> str:
 
 
 # ──────────────────────────────────────────────────────────── 圖示
+def logo_dir() -> Path:
+    """logo 資料夾 (打包後在 _internal 內, 原始碼執行時在 .py 同層)。"""
+    if getattr(sys, "frozen", False):
+        return Path(sys._MEIPASS) / "logo"
+    return app_dir() / "logo"
+
+
 def app_icon() -> QIcon:
-    """讀取程式 (exe) 所在資料夾的 ./logo/cargo_manager.ico 或 .png。"""
+    """讀取 logo 資料夾的 cargo_manager.ico 或 .png。"""
     for name in ("cargo_manager.ico", "cargo_manager.png"):
-        f = app_dir() / "logo" / name
+        f = logo_dir() / name
         if f.exists():
             return QIcon(str(f))
     return QIcon()
@@ -674,7 +712,6 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(APP_NAME)
         self.setWindowIcon(app_icon())
 
-        self.settings = QSettings(str(app_dir() / "cargo_manager.ini"), QSettings.IniFormat)
         self.proc: QProcess | None = None
         self.quiet_procs = set()
         self.ansi = AnsiConverter()
@@ -842,7 +879,7 @@ class MainWindow(QMainWindow):
         apply_i18n(self._i18n)
         self.lang_buttons[current_language()].setChecked(True)
         self.lbl_about_ver.setText(t("版本 {v}").format(v=APP_VERSION))
-        self.lbl_cfg_path.setText(t("設定檔: {path}").format(path=app_dir() / "cargo_manager.ini"))
+        self.lbl_cfg_path.setText(t("設定檔: {path}").format(path=settings_path()))
         self._fill_help()
         for lb, text, url in self._about_links:
             lb.setText(f'<a style="color:#e8a15c;text-decoration:none" href="{url}">{t(text)}</a>'
@@ -1183,7 +1220,7 @@ class MainWindow(QMainWindow):
         f.addRow("cargo", self.lbl_about_cargo)
         f.addRow("rustc", self.lbl_about_rustc)
         f.addRow("rustup", self.lbl_about_rustup)
-        cfg = QLabel(str(app_dir() / "cargo_manager.ini"))
+        cfg = QLabel(str(settings_path()))
         cfg.setTextInteractionFlags(Qt.TextSelectableByMouse)
         f.addRow("設定檔", cfg)
         outer.addWidget(g)
@@ -1276,47 +1313,44 @@ class MainWindow(QMainWindow):
 
     # ───────────────────────── 設定
     def _load_settings(self):
-        s = self.settings
-        set_language(s.value("ui/language", LANG_ZH))
+        get = partial(setting_value, read_settings())
+        set_language(get("ui/language", LANG_ZH))
         self._retranslate()
-        self.ed_cargo_path.setText(norm_exe(s.value("tools/cargo", "")) or find_tool("cargo"))
-        self.ed_rustup_path.setText(norm_exe(s.value("tools/rustup", "")) or find_tool("rustup"))
-        recent = s.value("recent", []) or []
-        if isinstance(recent, str):
-            recent = [recent]
-        self.cb_project.addItems([r for r in recent if r])
-        self.chk_release.setChecked(s.value("opt/release", False, type=bool))
-        self.chk_verbose.setChecked(s.value("opt/verbose", False, type=bool))
-        self.ed_extra.setText(s.value("opt/extra", ""))
-        self.ed_env.setText(s.value("opt/env", ""))
-        self.ed_new_parent.setText(s.value("new/parent", ""))
-        self.cb_edition.setCurrentText(s.value("new/edition", "2024"))
-        self.chk_clear_on_run.setChecked(s.value("opt/clear_on_run", False, type=bool))
-        geo = s.value("window/geometry")
+        self.ed_cargo_path.setText(norm_exe(get("tools/cargo", "")) or find_tool("cargo"))
+        self.ed_rustup_path.setText(norm_exe(get("tools/rustup", "")) or find_tool("rustup"))
+        self.cb_project.addItems([r for r in get("recent", []) if r and isinstance(r, str)])
+        self.chk_release.setChecked(get("opt/release", False))
+        self.chk_verbose.setChecked(get("opt/verbose", False))
+        self.ed_extra.setText(get("opt/extra", ""))
+        self.ed_env.setText(get("opt/env", ""))
+        self.ed_new_parent.setText(get("new/parent", ""))
+        self.cb_edition.setCurrentText(get("new/edition", "2024"))
+        self.chk_clear_on_run.setChecked(get("opt/clear_on_run", False))
+        geo = get("window/geometry", "")
         if geo:
-            self.restoreGeometry(geo)
-        last = s.value("last_project", "")
+            self.restoreGeometry(QByteArray.fromBase64(geo.encode("ascii", "ignore")))
+        last = get("last_project", "")
         if last and (Path(last) / "Cargo.toml").exists():
             self.open_project(last, quiet=True)
 
     def _save_settings(self):
-        s = self.settings
         self.ed_cargo_path.setText(norm_exe(self.ed_cargo_path.text()))
         self.ed_rustup_path.setText(norm_exe(self.ed_rustup_path.text()))
-        s.setValue("tools/cargo", self.ed_cargo_path.text())
-        s.setValue("tools/rustup", self.ed_rustup_path.text())
-        s.setValue("recent", [self.cb_project.itemText(i) for i in range(self.cb_project.count())])
-        s.setValue("last_project", self.project_dir() or "")
-        s.setValue("opt/release", self.chk_release.isChecked())
-        s.setValue("opt/verbose", self.chk_verbose.isChecked())
-        s.setValue("opt/extra", self.ed_extra.text())
-        s.setValue("opt/env", self.ed_env.text())
-        s.setValue("opt/clear_on_run", self.chk_clear_on_run.isChecked())
-        s.setValue("new/parent", self.ed_new_parent.text())
-        s.setValue("new/edition", self.cb_edition.currentText())
-        s.setValue("window/geometry", self.saveGeometry())
-        s.setValue("ui/language", current_language())
-        s.sync()
+        write_settings({
+            "tools": {"cargo": self.ed_cargo_path.text(), "rustup": self.ed_rustup_path.text()},
+            "recent": [self.cb_project.itemText(i) for i in range(self.cb_project.count())],
+            "last_project": self.project_dir() or "",
+            "opt": {
+                "release": self.chk_release.isChecked(),
+                "verbose": self.chk_verbose.isChecked(),
+                "extra": self.ed_extra.text(),
+                "env": self.ed_env.text(),
+                "clear_on_run": self.chk_clear_on_run.isChecked(),
+            },
+            "new": {"parent": self.ed_new_parent.text(), "edition": self.cb_edition.currentText()},
+            "window": {"geometry": bytes(self.saveGeometry().toBase64()).decode("ascii")},
+            "ui": {"language": current_language()},
+        })
 
     def _auto_detect(self):
         self.ed_cargo_path.setText(find_tool("cargo"))

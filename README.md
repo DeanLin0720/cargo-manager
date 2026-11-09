@@ -59,14 +59,14 @@ Linux 請改用 `source .venv/bin/activate` 啟用虛擬環境。
 
 ```bash
 pip install pyinstaller
-pyinstaller -D -w --name cargo_manager --icon logo/cargo_manager.ico cargo_manager.py
+pyinstaller -D -w --name cargo_manager --icon logo/cargo_manager.ico --add-data "logo:logo" cargo_manager.py
 ```
 
-打包後請把 `logo` 資料夾複製到 `dist/cargo_manager/`，與 `cargo_manager.exe` 放在同一層。
+`logo` 資料夾會自動放進 `dist/cargo_manager/_internal/`，不需要手動複製。
 
 ### 設定檔
 
-設定會存在程式同目錄的 `cargo_manager.ini`，包含工具路徑、最近專案、介面語系與視窗位置。
+設定會存在程式同目錄的 `cargo_manager.json`，包含工具路徑、最近專案、介面語系與視窗位置。
 
 ### 授權
 
@@ -133,14 +133,14 @@ On Linux, activate the virtual environment with `source .venv/bin/activate` inst
 
 ```bash
 pip install pyinstaller
-pyinstaller -D -w --name cargo_manager --icon logo/cargo_manager.ico cargo_manager.py
+pyinstaller -D -w --name cargo_manager --icon logo/cargo_manager.ico --add-data "logo:logo" cargo_manager.py
 ```
 
-After building, copy the `logo` folder into `dist/cargo_manager/`, next to `cargo_manager.exe`.
+The `logo` folder is placed in `dist/cargo_manager/_internal/` automatically, so there is no need to copy it by hand.
 
 ### Configuration
 
-Settings are stored in `cargo_manager.ini` next to the program, including tool paths, recent projects, the interface language, and the window position.
+Settings are stored in `cargo_manager.json` next to the program, including tool paths, recent projects, the interface language, and the window position.
 
 ### License
 

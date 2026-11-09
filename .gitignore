@@ -9,4 +9,6 @@ dist/
 *.spec
 
 # 本機設定 (路徑、最近專案、視窗位置)
+cargo_manager.json
+cargo_manager.json.tmp
 cargo_manager.ini
