@@ -13,7 +13,7 @@ Cargo Manager — Rust cargo 圖形化管理工具 (PySide6, 深色模式)
   * 輸出視窗支援 ANSI 色彩、可中止執行中的程序
   * 指令說明: 可搜尋的 cargo 指令用途與範例
   * 介面語系: 繁體中文 / English (主分頁右上角切換)
-  * 設定存於程式同目錄的 cargo_manager.json
+  * 設定存於程式同目錄的 cargo_manager_settings.json
 
 需求: Python 3.9+、PySide6、已安裝 Rust (rustup / cargo)
 
@@ -44,7 +44,7 @@ from PySide6.QtWidgets import (
     QTableWidget, QTableWidgetItem, QTabWidget, QVBoxLayout, QWidget)
 
 APP_NAME = "Cargo Manager"
-APP_VERSION = "1.2.2"
+APP_VERSION = "1.2.3"
 IS_WIN = sys.platform.startswith("win")
 EXE_SUFFIX = ".exe" if IS_WIN else ""
 
@@ -58,7 +58,7 @@ def app_dir() -> Path:
 
 
 def settings_path() -> Path:
-    return app_dir() / "cargo_manager.json"
+    return app_dir() / "cargo_manager_settings.json"
 
 
 def read_settings() -> dict:

@@ -66,7 +66,7 @@ pyinstaller -D -w --name cargo_manager --icon logo/cargo_manager.ico --add-data 
 
 ### 設定檔
 
-設定會存在程式同目錄的 `cargo_manager.json`，包含工具路徑、最近專案、介面語系與視窗位置。
+設定會存在程式同目錄的 `cargo_manager_settings.json`，包含工具路徑、最近專案、介面語系與視窗位置。
 
 ### 授權
 
@@ -140,7 +140,7 @@ The `logo` folder is placed in `dist/cargo_manager/_internal/` automatically, so
 
 ### Configuration
 
-Settings are stored in `cargo_manager.json` next to the program, including tool paths, recent projects, the interface language, and the window position.
+Settings are stored in `cargo_manager_settings.json` next to the program, including tool paths, recent projects, the interface language, and the window position.
 
 ### License
 

@@ -20,7 +20,7 @@ Rust cargo 的 PySide6 深色模式 GUI 管理工具。單一檔案 `cargo_manag
 2. **視窗標題只顯示 `APP_NAME`（"Cargo Manager"），不顯示版本**。版本 `APP_VERSION` 只出現在「關於」頁。
 3. **不要在視窗內左上角放標題文字 / logo 標籤**。
 4. **圖示**：只從 `logo_dir()` 的 `cargo_manager.ico`（其次 `.png`）讀取，由 `app_icon()` 處理；打包後 `logo` 在 `_internal/logo`（`sys._MEIPASS`），原始碼執行時在 `.py` 同層；找不到就不顯示圖示。**不要**內建或繪製圖示。`.ico` 由使用者自行提供（Rust 螃蟹圖）。
-5. **設定存在程式同目錄的 `cargo_manager.json`**（UTF-8 JSON，`settings_path()`），不用 ini 或登錄檔。
+5. **設定存在程式同目錄的 `cargo_manager_settings.json`**（UTF-8 JSON，`settings_path()`），不用 ini 或登錄檔。
 6. **執行檔路徑副檔名一律小寫 `.exe`**：所有路徑經過 `norm_exe()`（`shutil.which` 在 Windows 會回傳 `.EXE`）。新增任何路徑來源時也要套用。
 7. **PyInstaller 打包指令寫在檔案開頭 docstring**；使用 `-D`（資料夾模式），`logo` 資料夾用 `--add-data` 放進 `_internal`，不放在 exe 同層：
    ```
@@ -69,7 +69,7 @@ Rust cargo 的 PySide6 深色模式 GUI 管理工具。單一檔案 `cargo_manag
 - `run_quiet` 的 callback 需容忍 QProcess 已被銷毀（視窗關閉時），已用 `try/except RuntimeError` 保護。
 - 語系：程式內字串仍寫繁體中文，並在 `EN` 加上英文對照（英文不可含 `&`，會被當成快捷鍵）。靜態元件文字建好後會自動納入切換；執行期才產生的文字用 `t("...{x}").format(x=...)`（不要用 f-string 當 key）；會停留在畫面上的動態文字要能在 `_retranslate()` 重繪（狀態列 `_set_status`、專案資訊 `_set_info`）。
 
-## 功能清單（目前 v1.2.2）
+## 功能清單（目前 v1.2.3）
 
 - **語系**：主分頁列右上角切換繁體中文 / English，立即生效，存於 JSON 的 `ui.language`（預設繁中）；已輸出的記錄與 cargo 輸出不翻譯。
 
@@ -96,8 +96,8 @@ QT_QPA_PLATFORM=offscreen python3 test_script.py
 
 建議回歸流程：`cargo_new` 建專案 → 確認 `lbl_info` / `cb_bin` → `run_action("run")` → `cargo add` 後相依表有資料 → `remove_dependency` → `search_crates`。
 
-測試前刪除 `cargo_manager.json` 以免沿用舊設定；測試用的專案資料夾不要留在程式目錄。
+測試前刪除 `cargo_manager_settings.json` 以免沿用舊設定；測試用的專案資料夾不要留在程式目錄。
 
 ## 版本
 
-- 修改功能時同步更新 `APP_VERSION`（目前 `1.2.2`）與本檔「功能清單」。
+- 修改功能時同步更新 `APP_VERSION`（目前 `1.2.3`）與本檔「功能清單」。
