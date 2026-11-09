@@ -31,7 +31,7 @@ Rust cargo 的 PySide6 深色模式 GUI 管理工具。單一檔案 `cargo_manag
    - 分頁標籤選中時**文字顏色不變**，不要在 `QTabBar::tab:selected` 設 `color`。
    - 專案路徑列、專案資訊卡、子分頁（建置/執行、相依套件、工具鏈/安裝、設定、指令說明）**只在「專案管理」頁**。
    - 啟動時有上次專案 → 停在「專案管理」；否則停在「新增專案」。開啟 / 建立專案後自動切到「專案管理」（`open_project` 內 `setCurrentWidget(self.page_manage)`）。
-9. 底部「輸出」區與自訂 cargo 指令列為所有主分頁共用（在 `QSplitter` 下半部）。
+9. 底部「輸出」區為所有主分頁共用（在 `QSplitter` 下半部）；自訂 cargo 指令列在「建置 / 執行」子分頁頂端。
 
 ## 程式架構（cargo_manager.py）
 
@@ -70,20 +70,20 @@ Rust cargo 的 PySide6 深色模式 GUI 管理工具。單一檔案 `cargo_manag
 - `run_quiet` 的 callback 需容忍 QProcess 已被銷毀（視窗關閉時），已用 `try/except RuntimeError` 保護。
 - 語系：程式內字串仍寫繁體中文，並在 `EN` 加上英文對照（英文不可含 `&`，會被當成快捷鍵）。靜態元件文字建好後會自動納入切換；執行期才產生的文字用 `t("...{x}").format(x=...)`（不要用 f-string 當 key）；會停留在畫面上的動態文字要能在 `_retranslate()` 重繪（狀態列 `_set_status`、專案資訊 `_set_info`）。
 
-## 功能清單（目前 v1.4.0）
+## 功能清單（目前 v1.4.1）
 
 - **語系**：主分頁列右上角切換繁體中文 / English，立即生效，存於 JSON 的 `ui.language`（預設繁中）；已輸出的記錄與 cargo 輸出不翻譯。
 
 - **新增專案**：`cargo new` / `cargo init`，bin/lib、edition 2015–2024、vcs。
 - **專案管理**
   - 專案列：最近 15 個專案、瀏覽、重新整理、重新命名（改 `[package] name`，可同時改資料夾；僅限單一套件專案）、檔案總管、VS Code（`code` 指令）。
-  - 建置/執行：run、build、check、test、bench、clippy、clippy --fix、fmt、fmt --check、doc --open、clean、update、tree、fix；選項 release / all-features / no-default-features / workspace / -v / features / target（可載入 rustup 已安裝 target）/ --bin / 額外參數 / 程式參數（`--` 後）/ 環境變數。
+  - 建置/執行：頂端自訂 `cargo ...` 指令列；run、build、check、test、bench、clippy、clippy --fix、fmt、fmt --check、doc --open、clean、update、tree、fix；選項 release / all-features / no-default-features / workspace / -v / features / target（可載入 rustup 已安裝 target）/ --bin / 額外參數 / 程式參數（`--` 後）/ 環境變數。
   - 相依套件：表格（名稱、版本需求、類型、features、optional、來源）、新增、移除、`update -p`、crates.io 搜尋（`cargo search`，雙擊加入）。
   - 工具鏈/安裝：rustup show/update/toolchain/target/component、default、override set/unset、target add/remove；`cargo install`（--locked/--force）/ uninstall / `install --path .`。
   - 設定：cargo / rustup 路徑（自動偵測、瀏覽、儲存並檢查）、清除最近專案、執行前清除輸出。
   - 指令說明：cargo 各指令的分類、用途與範例表格，可依關鍵字即時篩選。
 - **關於**：圖示、名稱、版本、簡介、作者、Python/PySide6/cargo/rustc/rustup 版本、設定檔路徑、相關連結。
-- 輸出區：ANSI 彩色、自動捲動、停止、清除；未換行的提示會立即顯示；輸入列（`send_stdin`，僅主程序執行中可用）可傳文字給執行中的程式，「結束輸入」送出 EOF；底部自訂 `cargo ...` 指令。
+- 輸出區：ANSI 彩色、自動捲動、停止、清除；未換行的提示會立即顯示；輸入列（`send_stdin`，僅主程序執行中可用）可傳文字給執行中的程式，「結束輸入」送出 EOF。
 
 ## 測試
 
@@ -101,4 +101,4 @@ QT_QPA_PLATFORM=offscreen python3 test_script.py
 
 ## 版本
 
-- 修改功能時同步更新 `APP_VERSION`（目前 `1.4.0`）與本檔「功能清單」。
+- 修改功能時同步更新 `APP_VERSION`（目前 `1.4.1`）與本檔「功能清單」。

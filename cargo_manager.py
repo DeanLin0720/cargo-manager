@@ -44,7 +44,7 @@ from PySide6.QtWidgets import (
     QTableWidget, QTableWidgetItem, QTabWidget, QVBoxLayout, QWidget)
 
 APP_NAME = "Cargo Manager"
-APP_VERSION = "1.4.0"
+APP_VERSION = "1.4.1"
 IS_WIN = sys.platform.startswith("win")
 EXE_SUFFIX = ".exe" if IS_WIN else ""
 
@@ -930,19 +930,6 @@ class MainWindow(QMainWindow):
         ol.addLayout(ih)
         self._set_stdin_enabled(False)
 
-        # 自訂指令
-        ch = QHBoxLayout()
-        ch.addWidget(QLabel("cargo"))
-        self.ed_custom = QLineEdit()
-        self.ed_custom.setPlaceholderText("自訂指令, 例如: build --example demo   (Enter 執行)")
-        self.ed_custom.returnPressed.connect(self.run_custom)
-        ch.addWidget(self.ed_custom, 1)
-        b = QPushButton("執行")
-        b.clicked.connect(self.run_custom)
-        self.busy_buttons.append(b)
-        ch.addWidget(b)
-        ol.addLayout(ch)
-
         splitter.addWidget(out_box)
         splitter.setSizes([520, 320])
         self.resize(1150, 860)
@@ -1014,7 +1001,20 @@ class MainWindow(QMainWindow):
 
     def _tab_build(self):
         w = QWidget()
-        lay = QHBoxLayout(w)
+        root = QVBoxLayout(w)
+
+        # 自訂指令
+        ch = QHBoxLayout()
+        ch.addWidget(QLabel("cargo"))
+        self.ed_custom = QLineEdit()
+        self.ed_custom.setPlaceholderText("自訂指令, 例如: build --example demo   (Enter 執行)")
+        self.ed_custom.returnPressed.connect(self.run_custom)
+        ch.addWidget(self.ed_custom, 1)
+        ch.addWidget(self._btn("執行", self.run_custom))
+        root.addLayout(ch)
+
+        lay = QHBoxLayout()
+        root.addLayout(lay, 1)
 
         # 指令按鈕
         g = QGroupBox("指令")
