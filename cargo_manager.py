@@ -3,14 +3,14 @@
 Cargo Manager — Rust cargo 圖形化管理工具 (PySide6, 深色模式)
 
 功能:
-  * 開啟 / 最近專案、顯示 Cargo.toml 資訊 (支援 workspace 成員選擇)
+  * 開啟 / 最近專案、顯示 Cargo.toml 資訊 (支援 workspace 成員選擇)、重新命名專案
   * build / run / check / test / bench / clippy / fmt / doc / clean / update / tree
     - release、features、all-features、no-default-features、target triple、額外參數、run 參數
   * 自訂 cargo 指令
   * 相依套件: 列表 (cargo metadata)、cargo add / remove / update -p、crates.io 搜尋 (cargo search)
   * 新專案: cargo new / cargo init (bin / lib, edition, vcs)
   * 工具鏈: rustup show / update / toolchain / target add、cargo install / uninstall
-  * 輸出視窗支援 ANSI 色彩、可中止執行中的程序
+  * 輸出視窗支援 ANSI 色彩、可中止執行中的程序、可輸入內容給執行中的程式
   * 指令說明: 可搜尋的 cargo 指令用途與範例
   * 介面語系: 繁體中文 / English (主分頁右上角切換)
   * 設定存於程式同目錄的 cargo_manager_settings.json
@@ -34,7 +34,7 @@ from functools import partial
 from pathlib import Path
 
 from PySide6.QtCore import QByteArray, QProcess, QProcessEnvironment, Qt, QUrl
-from PySide6.QtGui import (QColor, QDesktopServices, QFont, QIcon, QPalette,
+from PySide6.QtGui import (QColor, QDesktopServices, QFont, QIcon, QPalette, QTextCharFormat,
                            QTextCursor)
 from PySide6.QtWidgets import (
     QAbstractButton, QAbstractItemView, QApplication, QButtonGroup, QCheckBox,
@@ -44,7 +44,7 @@ from PySide6.QtWidgets import (
     QTableWidget, QTableWidgetItem, QTabWidget, QVBoxLayout, QWidget)
 
 APP_NAME = "Cargo Manager"
-APP_VERSION = "1.2.3"
+APP_VERSION = "1.4.0"
 IS_WIN = sys.platform.startswith("win")
 EXE_SUFFIX = ".exe" if IS_WIN else ""
 
@@ -320,6 +320,12 @@ EN = {
     "自動捲動": "Auto-scroll",
     "■ 停止": "■ Stop",
     "清除": "Clear",
+    "輸入": "Input",
+    "傳給執行中程式的輸入   (Enter 送出)": "Input for the running program   (Enter to send)",
+    "送出": "Send",
+    "結束輸入": "End input",
+    "關閉標準輸入 (EOF)，用於會讀取到輸入結尾的程式":
+        "Close standard input (EOF) for programs that read until the end of input",
     "自訂指令, 例如: build --example demo   (Enter 執行)":
         "Custom command, e.g. build --example demo   (Enter to run)",
     "執行": "Run",
@@ -506,6 +512,23 @@ EN = {
     "已載入 {n} 個已安裝 target": "Loaded {n} installed target(s)",
     "請先開啟專案並輸入 toolchain。": "Please open a project and enter a toolchain first.",
     "請先開啟專案。": "Please open a project first.",
+    "重新命名": "Rename",
+    "重新命名專案": "Rename Project",
+    "新名稱": "New name",
+    "同時把資料夾改成新名稱": "Also rename the folder to the new name",
+    "會修改 Cargo.toml 的套件名稱。程式碼中以舊名稱引用此 crate 的地方 (例如 use 陳述式) 需要自行修改。":
+        "This changes the package name in Cargo.toml. Update any code that refers to this crate "
+        "by its old name (such as use statements) yourself.",
+    "名稱只能包含英文字母、數字、- 與 _，且不可以數字或 - 開頭。":
+        "Names can only contain letters, digits, - and _, and cannot start with a digit or -.",
+    "名稱沒有變更。": "The name has not changed.",
+    "目前只支援單一套件的專案，workspace 請手動修改 Cargo.toml。":
+        "Only single-package projects are supported. For a workspace, edit Cargo.toml by hand.",
+    "資料夾已存在:\n{target}": "Folder already exists:\n{target}",
+    "在 Cargo.toml 的 [package] 找不到 name。": "Could not find name under [package] in Cargo.toml.",
+    "重新命名失敗 (資料夾可能正被 VS Code 等程式使用):\n{ex}":
+        "Rename failed (the folder may be in use by a program such as VS Code):\n{ex}",
+    "已重新命名專案: {old} → {new}": "Renamed project: {old} → {new}",
     "請先在表格中選取要移除的套件。": "Please select the packages to remove in the table first.",
     "確定移除: {names} ?": "Remove: {names} ?",
     "請先在表格中選取套件 (未選取請用「建置」頁的 update)。":
@@ -634,6 +657,63 @@ def apply_i18n(items: list):
 
 
 # ──────────────────────────────────────────────────────────── 新增相依對話框
+PACKAGE_NAME_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_-]*")
+
+
+def rename_manifest(text: str, new_name: str) -> str | None:
+    """只改 [package] 區段的 name, 其餘內容與格式不動; 找不到時回傳 None。"""
+    lines = text.splitlines(keepends=True)
+    in_package = False
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        if stripped.startswith("["):
+            in_package = stripped.split("#")[0].strip() == "[package]"
+        elif in_package:
+            m = re.match(r"""(\s*name\s*=\s*)("[^"]*"|'[^']*')(.*)""", line, re.S)
+            if m:
+                lines[i] = f'{m[1]}"{new_name}"{m[3]}'
+                return "".join(lines)
+    return None
+
+
+class RenameProjectDialog(QDialog):
+    def __init__(self, parent, name: str, folder: str):
+        super().__init__(parent)
+        self.old_name = name
+        self.folder = folder
+        self.setWindowTitle(t("重新命名專案"))
+        self.setMinimumWidth(460)
+        form = QFormLayout(self)
+        self.ed_name = QLineEdit(name)
+        self.ed_name.selectAll()
+        self.chk_folder = QCheckBox("同時把資料夾改成新名稱")
+        self.chk_folder.setChecked(folder == name)
+        hint = QLabel("會修改 Cargo.toml 的套件名稱。程式碼中以舊名稱引用此 crate 的地方 (例如 use 陳述式) 需要自行修改。")
+        hint.setObjectName("muted")
+        hint.setWordWrap(True)
+        form.addRow("新名稱", self.ed_name)
+        form.addRow("", self.chk_folder)
+        form.addRow(hint)
+        bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bb.accepted.connect(self._accept)
+        bb.rejected.connect(self.reject)
+        form.addRow(bb)
+        apply_i18n(collect_i18n(self))
+
+    def _accept(self):
+        name = self.ed_name.text().strip()
+        if not PACKAGE_NAME_RE.fullmatch(name):
+            QMessageBox.warning(self, APP_NAME, t("名稱只能包含英文字母、數字、- 與 _，且不可以數字或 - 開頭。"))
+            return
+        if name == self.old_name and (not self.chk_folder.isChecked() or name == self.folder):
+            QMessageBox.information(self, APP_NAME, t("名稱沒有變更。"))
+            return
+        self.accept()
+
+    def values(self) -> tuple:
+        return self.ed_name.text().strip(), self.chk_folder.isChecked()
+
+
 class AddDependencyDialog(QDialog):
     def __init__(self, parent=None, name="", version=""):
         super().__init__(parent)
@@ -716,6 +796,7 @@ class MainWindow(QMainWindow):
         self.quiet_procs = set()
         self.ansi = AnsiConverter()
         self._partial = ""
+        self._partial_cursor = None  # 已顯示但未換行的那一行
         self.metadata = None
         self.busy_buttons = []
         self._status = ("就緒", {})  # 目前狀態列的 (中文範本, 代入值), 切換語系時重繪
@@ -753,6 +834,7 @@ class MainWindow(QMainWindow):
         b = QPushButton("重新整理")
         b.clicked.connect(self.refresh_project)
         top.addWidget(b)
+        top.addWidget(self._btn("重新命名", self.rename_project))
         b = QPushButton("檔案總管")
         b.clicked.connect(self.open_in_explorer)
         top.addWidget(b)
@@ -830,6 +912,23 @@ class MainWindow(QMainWindow):
         self.console.setFont(mono)
         self.console.setStyleSheet("QPlainTextEdit{background:#16171a;}")
         ol.addWidget(self.console, 1)
+
+        # 傳給執行中程式的輸入
+        ih = QHBoxLayout()
+        ih.addWidget(QLabel("輸入"))
+        self.ed_stdin = QLineEdit()
+        self.ed_stdin.setPlaceholderText("傳給執行中程式的輸入   (Enter 送出)")
+        self.ed_stdin.returnPressed.connect(self.send_stdin)
+        ih.addWidget(self.ed_stdin, 1)
+        self.btn_send_stdin = QPushButton("送出")
+        self.btn_send_stdin.clicked.connect(self.send_stdin)
+        ih.addWidget(self.btn_send_stdin)
+        self.btn_close_stdin = QPushButton("結束輸入")
+        self.btn_close_stdin.setToolTip("關閉標準輸入 (EOF)，用於會讀取到輸入結尾的程式")
+        self.btn_close_stdin.clicked.connect(self.close_stdin)
+        ih.addWidget(self.btn_close_stdin)
+        ol.addLayout(ih)
+        self._set_stdin_enabled(False)
 
         # 自訂指令
         ch = QHBoxLayout()
@@ -1528,6 +1627,49 @@ class MainWindow(QMainWindow):
                     it.setData(Qt.UserRole, (d.get("rename") or d["name"], d["name"], d.get("kind")))
                 self.tbl_deps.setItem(r, c, it)
 
+    def rename_project(self):
+        d = self.project_dir()
+        if not d:
+            QMessageBox.warning(self, APP_NAME, t("請先開啟專案。"))
+            return
+        src = Path(d)
+        manifest = src / "Cargo.toml"
+        pkgs = (self.metadata or {}).get("packages", [])
+        if len(pkgs) != 1 or os.path.normcase(pkgs[0]["manifest_path"]) != os.path.normcase(str(manifest)):
+            QMessageBox.warning(self, APP_NAME, t("目前只支援單一套件的專案，workspace 請手動修改 Cargo.toml。"))
+            return
+        dlg = RenameProjectDialog(self, pkgs[0]["name"], src.name)
+        if dlg.exec() != QDialog.Accepted:
+            return
+        new_name, rename_folder = dlg.values()
+        target = src.with_name(new_name) if rename_folder else src
+        # Windows 的 Path 比較不分大小寫, 只改大小寫時也要改名, 所以比較字串
+        move = str(target) != str(src)
+        if move and target.exists() and not target.samefile(src):
+            QMessageBox.warning(self, APP_NAME, t("資料夾已存在:\n{target}").format(target=target))
+            return
+        try:
+            raw = manifest.read_bytes()  # 用 bytes 讀寫以保留原本的換行字元
+            updated = rename_manifest(raw.decode("utf-8"), new_name)
+            if updated is None:
+                QMessageBox.warning(self, APP_NAME, t("在 Cargo.toml 的 [package] 找不到 name。"))
+                return
+            manifest.write_bytes(updated.encode("utf-8"))
+            if move:
+                try:
+                    src.rename(target)
+                except OSError:
+                    manifest.write_bytes(raw)
+                    raise
+        except (OSError, UnicodeDecodeError) as ex:
+            QMessageBox.warning(self, APP_NAME,
+                                t("重新命名失敗 (資料夾可能正被 VS Code 等程式使用):\n{ex}").format(ex=ex))
+            return
+        if move:
+            self.cb_project.removeItem(self.cb_project.findText(d))
+        self.log_info(t("已重新命名專案: {old} → {new}").format(old=pkgs[0]["name"], new=new_name))
+        self.open_project(str(target))
+
     def open_in_explorer(self):
         d = self.project_dir()
         if d:
@@ -1566,6 +1708,7 @@ class MainWindow(QMainWindow):
             return
         data = bytes(self.proc.readAllStandardOutput()).decode("utf-8", errors="replace")
         data = data.replace("\r\n", "\n")
+        self._remove_partial_view()
         text = self._partial + data
         lines = text.split("\n")
         self._partial = lines.pop()
@@ -1574,8 +1717,64 @@ class MainWindow(QMainWindow):
             if "\r" in line:
                 line = line.split("\r")[-1]
             self.console.appendHtml(self.ansi.convert(line))
-        if lines:
+        self._show_partial()
+        if lines or self._partial:
             self._scroll()
+
+    def _show_partial(self):
+        """顯示尚未換行的輸出 (例如等待輸入的提示), 收到後續內容時會重繪。"""
+        shown = self._partial.split("\r")[-1]
+        if not shown:
+            return
+        if shown.endswith(" "):  # 行尾空白會被 HTML 吃掉
+            shown = shown[:-1] + " "
+        state = self.ansi.fg, self.ansi.bold
+        self.console.appendHtml(self.ansi.convert(shown))
+        self.ansi.fg, self.ansi.bold = state
+        self._partial_cursor = QTextCursor(self.console.document().lastBlock())
+
+    def _remove_partial_view(self):
+        if self._partial_cursor:
+            self._partial_cursor.select(QTextCursor.BlockUnderCursor)
+            self._partial_cursor.removeSelectedText()
+            self._partial_cursor = None
+
+    # ───────────────────────── 程式輸入
+    def _set_stdin_enabled(self, on: bool):
+        for w in (self.ed_stdin, self.btn_send_stdin, self.btn_close_stdin):
+            w.setEnabled(on)
+
+    def send_stdin(self):
+        if not self.is_running() or not self.ed_stdin.isEnabled():
+            return
+        text = self.ed_stdin.text()
+        self.ed_stdin.clear()
+        self.proc.write((text + "\n").encode("utf-8"))
+        self._echo_input(text)
+
+    def _echo_input(self, text: str):
+        """把使用者的輸入顯示在輸出區; 有未換行的提示時接在提示後面。"""
+        color = "#e8a15c"
+        doc = self.console.document()
+        if self._partial_cursor and self._partial_cursor.block() == doc.lastBlock():
+            self.ansi.convert(self._partial)  # 這段已定案, 更新跨行色彩狀態
+            self._partial = ""
+            self._partial_cursor = None
+            fmt = QTextCharFormat()
+            fmt.setForeground(QColor(color))
+            cursor = QTextCursor(doc)
+            cursor.movePosition(QTextCursor.End)
+            cursor.insertText(text, fmt)
+            self._scroll()
+        else:
+            shown = html.escape(text).replace("  ", "&nbsp;&nbsp;") or "&nbsp;"
+            self.console.appendHtml(f'<span style="color:{color}">{shown}</span>')
+            self._scroll()
+
+    def close_stdin(self):
+        if self.is_running():
+            self.proc.closeWriteChannel()
+            self._set_stdin_enabled(False)
 
     # ───────────────────────── 執行程序
     def _env(self, extra_env: dict | None = None, color=True) -> QProcessEnvironment:
@@ -1611,6 +1810,7 @@ class MainWindow(QMainWindow):
             self.console.clear()
         self.ansi.reset()
         self._partial = ""
+        self._partial_cursor = None
         shown = " ".join(quote_arg(a) for a in [Path(program).stem] + args)
         self.log_info(f"\n$ {shown}" + (f"    [{cwd}]" if cwd else ""), "#61afef")
 
@@ -1631,9 +1831,8 @@ class MainWindow(QMainWindow):
             self._set_busy(False)
 
     def _on_finished(self, code, status, on_done):
-        if self._partial:
-            self.console.appendHtml(self.ansi.convert(self._partial))
-            self._partial = ""
+        self._partial = ""  # 未換行的內容已由 _show_partial 顯示
+        self._partial_cursor = None
         if status == QProcess.CrashExit:
             self.log_info(t("■ 程序已中止"), "#e5c07b")
         elif code == 0:
@@ -1648,9 +1847,12 @@ class MainWindow(QMainWindow):
         self.btn_stop.setEnabled(busy)
         for b in self.busy_buttons:
             b.setEnabled(not busy)
+        self._set_stdin_enabled(busy)
         if busy:
+            self.ed_stdin.setFocus()
             self._set_status("執行中: {text}", text=text)
         else:
+            self.ed_stdin.clear()
             self._set_status("就緒")
 
     def stop_process(self):
