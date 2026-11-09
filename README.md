@@ -19,6 +19,24 @@ Cargo Manager 是 Rust cargo 的深色模式圖形化管理工具，以 Python �
 - **專案管理**：最近 15 個專案、支援 workspace 成員選擇，可開啟檔案總管或 VS Code。
 - **介面語系**：在視窗右上角切換繁體中文 / English，立即生效。
 
+### 畫面截圖
+
+**建置 / 執行**
+
+![建置與執行畫面](docs/screenshots/zh-build.png)
+
+**相依套件**
+
+![相依套件畫面](docs/screenshots/zh-deps.png)
+
+**指令說明**
+
+![指令說明畫面](docs/screenshots/zh-guide.png)
+
+**新增專案**
+
+![新增專案畫面](docs/screenshots/zh-new.png)
+
 ### 系統需求
 
 - Windows（主要平台），Linux 也可執行
@@ -50,6 +68,10 @@ pyinstaller -D -w --name cargo_manager --icon logo/cargo_manager.ico cargo_manag
 
 設定會存在程式同目錄的 `cargo_manager.ini`，包含工具路徑、最近專案、介面語系與視窗位置。
 
+### 授權
+
+本專案採用 [MIT 授權](LICENSE)。
+
 ### 作者
 
 DeanLin
@@ -70,6 +92,24 @@ Cargo Manager is a dark-mode desktop GUI for Rust's cargo, built with Python and
 - **Output panel**: Shows cargo's colored output, auto-scrolls, stops running commands, and accepts custom cargo commands.
 - **Project management**: Remembers the 15 most recent projects, supports selecting workspace members, and opens projects in File Explorer or VS Code.
 - **Interface language**: Switch between Traditional Chinese and English from the top-right corner; the change applies immediately.
+
+### Screenshots
+
+**Build / Run**
+
+![Build and run screen](docs/screenshots/en-build.png)
+
+**Dependencies**
+
+![Dependencies screen](docs/screenshots/en-deps.png)
+
+**Command Guide**
+
+![Command guide screen](docs/screenshots/en-guide.png)
+
+**New Project**
+
+![New project screen](docs/screenshots/en-new.png)
 
 ### Requirements
 
@@ -101,6 +141,10 @@ After building, copy the `logo` folder into `dist/cargo_manager/`, next to `carg
 ### Configuration
 
 Settings are stored in `cargo_manager.ini` next to the program, including tool paths, recent projects, the interface language, and the window position.
+
+### License
+
+This project is licensed under the [MIT License](LICENSE).
 
 ### Author
 
