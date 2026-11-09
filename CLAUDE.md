@@ -26,8 +26,9 @@ Rust cargo 的 PySide6 深色模式 GUI 管理工具。單一檔案 `cargo_manag
    ```
    pyinstaller -D -w --name cargo_manager --icon logo/cargo_manager.ico cargo_manager.py
    ```
-8. **主分頁順序**：① `✨ 新增專案` ② `📂 專案管理` ③ `ℹ️ 關於`。
+8. **主分頁順序**：① `新增專案` ② `專案管理` ③ `關於`。分頁標籤**不加圖案**（含 emoji）。
    - 主分頁 `QTabWidget` 的 objectName 為 `main`；選中時橘色光條在**文字下方**（`border-bottom: 3px solid #e8a15c`）。
+   - 分頁標籤選中時**文字顏色不變**，不要在 `QTabBar::tab:selected` 設 `color`。
    - 專案路徑列、專案資訊卡、子分頁（建置/執行、相依套件、工具鏈/安裝、設定、指令說明）**只在「專案管理」頁**。
    - 啟動時有上次專案 → 停在「專案管理」；否則停在「新增專案」。開啟 / 建立專案後自動切到「專案管理」（`open_project` 內 `setCurrentWidget(self.page_manage)`）。
 9. 底部「輸出」區與自訂 cargo 指令列為所有主分頁共用（在 `QSplitter` 下半部）。
@@ -67,7 +68,7 @@ Rust cargo 的 PySide6 深色模式 GUI 管理工具。單一檔案 `cargo_manag
 - `run_quiet` 的 callback 需容忍 QProcess 已被銷毀（視窗關閉時），已用 `try/except RuntimeError` 保護。
 - 語系：程式內字串仍寫繁體中文，並在 `EN` 加上英文對照（英文不可含 `&`，會被當成快捷鍵）。靜態元件文字建好後會自動納入切換；執行期才產生的文字用 `t("...{x}").format(x=...)`（不要用 f-string 當 key）；會停留在畫面上的動態文字要能在 `_retranslate()` 重繪（狀態列 `_set_status`、專案資訊 `_set_info`）。
 
-## 功能清單（目前 v1.2.0）
+## 功能清單（目前 v1.2.1）
 
 - **語系**：主分頁列右上角切換繁體中文 / English，立即生效，存於 ini 的 `ui/language`（預設繁中）；已輸出的記錄與 cargo 輸出不翻譯。
 
@@ -98,4 +99,4 @@ QT_QPA_PLATFORM=offscreen python3 test_script.py
 
 ## 版本
 
-- 修改功能時同步更新 `APP_VERSION`（目前 `1.2.0`）與本檔「功能清單」。
+- 修改功能時同步更新 `APP_VERSION`（目前 `1.2.1`）與本檔「功能清單」。

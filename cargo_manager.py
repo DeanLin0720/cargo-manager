@@ -45,7 +45,7 @@ from PySide6.QtWidgets import (
     QTableWidget, QTableWidgetItem, QTabWidget, QVBoxLayout, QWidget)
 
 APP_NAME = "Cargo Manager"
-APP_VERSION = "1.2.0"
+APP_VERSION = "1.2.1"
 IS_WIN = sys.platform.startswith("win")
 EXE_SUFFIX = ".exe" if IS_WIN else ""
 
@@ -178,7 +178,7 @@ QTabBar::tab {
     background: #2b2d30; border: 1px solid #393b40; padding: 6px 14px;
     border-top-left-radius: 4px; border-top-right-radius: 4px; margin-right: 2px;
 }
-QTabBar::tab:selected { background: #1e1f22; color: #e8a15c; border-bottom-color: #1e1f22; }
+QTabBar::tab:selected { background: #1e1f22; border-bottom-color: #1e1f22; }
 QTabWidget#main > QTabBar::tab { padding: 8px 26px; font-size: 11pt; font-weight: bold; }
 QTabWidget#main > QTabBar::tab:selected { border-bottom: 3px solid #e8a15c; }
 QHeaderView::section {
@@ -262,9 +262,9 @@ EN = {
     "類型": "Type",
     "請輸入套件名稱或路徑。": "Please enter a package name or path.",
     # 主分頁 / 專案列
-    "✨  新增專案": "✨  New Project",
-    "📂  專案管理": "📂  Projects",
-    "ℹ️  關於": "ℹ️  About",
+    "新增專案": "New Project",
+    "專案管理": "Projects",
+    "關於": "About",
     "專案:": "Project:",
     "選擇含 Cargo.toml 的資料夾": "Select a folder containing Cargo.toml",
     "瀏覽…": "Browse…",
@@ -752,9 +752,9 @@ class MainWindow(QMainWindow):
         self.main_tabs.setObjectName("main")
         self.page_new = self._tab_new()
         self.page_manage = manage
-        self.main_tabs.addTab(self.page_new, "✨  新增專案")
-        self.main_tabs.addTab(self.page_manage, "📂  專案管理")
-        self.main_tabs.addTab(self._tab_about(), "ℹ️  關於")
+        self.main_tabs.addTab(self.page_new, "新增專案")
+        self.main_tabs.addTab(self.page_manage, "專案管理")
+        self.main_tabs.addTab(self._tab_about(), "關於")
         self.main_tabs.setCornerWidget(self._lang_switch(), Qt.TopRightCorner)
 
         splitter = QSplitter(Qt.Vertical)
